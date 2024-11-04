@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversor de Audio</title>
+    <link rel="stylesheet" href="static/styles.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Conversor de Audio</h1>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" name="file" required>
+            <button type="submit">Subir Audio</button>
+        </form>
+        
+        <div id="loading" style="display:none;">
+            <div class="progress">
+                <div class="progress-bar" id="progress"></div>
+            </div>
+            <p>Cargando...</p>
+        </div>
+        
+        <div id="audioInfo" style="display:none;">
+            <h2>Información del Audio</h2>
+            <p id="originalBitrate">Bitrate Original: </p>
+            <p id="originalSamplerate">Sample Rate Original: </p>
+            <label for="bitrate">Selecciona el Bitrate:</label>
+            <select id="bitrate" name="bitrate">
+                <option value="256">256 kbps</option>
+                <option value="192">192 kbps</option>
+                <option value="128">128 kbps</option>
+            </select>
+            <br>
+            <label for="samplerate">Selecciona el Sample Rate:</label>
+            <select id="samplerate" name="samplerate">
+                <option value="22050">22050 Hz</option>
+                <option value="44100">44100 Hz</option>
+                <option value="48000">48000 Hz</option>
+            </select>
+            <br>
+            <button id="convertButton">Convertir Audio</button>
+        </div>
+
+        <div id="result" style="display:none;">
+            <h2>Resultado</h2>
+            <p id="outputFile"></p>
+            <a id="downloadLink" href="#">Descargar Archivo</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').onsubmit = function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            
+            // Usar XMLHttpRequest para obtener el progreso
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload', true);
+            
+            // Manejador de progreso
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    document.getElementById('progress').style.width = percentComplete + '%'; // Actualizar barra de progreso
+                }
+            };
+
+            // Manejador de respuesta
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const data = JSON.parse(xhr.responseText);
+                    document.getElementById('originalBitrate').innerText = 'Bitrate Original: ' + data.original_bitrate + ' kbps';
+                    document.getElementById('originalSamplerate').innerText = 'Sample Rate Original: ' + data.original_samplerate + ' Hz';
+                    document.getElementById('audioInfo').style.display = 'block';
+                } else {
+                    alert('Error: ' + xhr.responseText);
+                }
+                document.getElementById('loading').style.display = 'none'; // Ocultar carga
+            };
+
+            // Mostrar la barra de progreso antes de enviar
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('progress').style.width = '0%';  // Reiniciar barra de progreso
+
+            xhr.send(formData);
+        };
+
+        document.getElementById('convertButton').onclick = async function() {
+            const bitrate = document.getElementById('bitrate').value;
+            const samplerate = document.getElementById('samplerate').value;
+            const fileInput = document.querySelector('input[type="file"]');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('bitrate', bitrate);
+            formData.append('samplerate', samplerate);
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('progress').style.width = '0%';  // Reset progress bar
+
+            const response = await fetch('/convert', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.output_file) {  // Asegurarse de que el nombre del archivo esté presente
+                    document.getElementById('outputFile').innerText = 'Archivo convertido: ' + data.output_file;
+                    document.getElementById('downloadLink').href = '/uploads/' + data.output_file; // Asegúrate de que el nombre esté correctamente asignado
+                    document.getElementById('result').style.display = 'block';
+                } else {
+                    alert('Error: El archivo convertido no está disponible.');
+                }
+            } else {
+                const errorData = await response.json();
+                alert('Error: ' + errorData.error);
+            }
+
+            document.getElementById('loading').style.display = 'none'; // Ocultar carga
+        };
+    </script>
+</body>
+</html>
